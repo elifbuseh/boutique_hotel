@@ -1,12 +1,18 @@
-# ui_main.py
 import customtkinter as ctk
 import tkinter as tk
 import tkinter.messagebox as mb
 from datetime import date, datetime
+from datetime import timedelta # Tarih hesaplamaları için eklendi
 from backend.services import hotel_service as db
 from frontend import theme
 from frontend.views import dashboard_view, reservations_view, rooms_view, room_types_view, guests_view
 import sys, traceback
+
+# --- YENI RENK TANIMLARI ---
+NEW_ACCENT = "#000b5c" 
+NEW_ACCENT_HOVER = "#000b5c" 
+ACCENT_TEXT = "#f8fafc" 
+# --- YENI RENK TANIMLARI SONU ---
 
 # Tema: LIGHT + pastel
 theme.apply_appearance()
@@ -48,37 +54,31 @@ class App(ctk.CTk):
         self.color_sidebar = colors["sidebar"]
         self.color_sidebar_dark = colors["sidebar_dark"]
         self.color_sidebar_light = colors["sidebar_light"]
-        self.color_accent = colors["accent"]
-        self.color_accent_alt = colors["accent_alt"]
+        self.color_accent = NEW_ACCENT
+        self.color_accent_alt = colors["accent_alt"] 
         self.color_text_main = colors["text_main"]
-        # Misafir duzenleme icin secili ID (None ise yeni kayit modundayiz)
+        
         self.selected_guest_id = None
-
-        # Rezervasyon combobox map'leri
         self.guest_choice_map = {}
         self.room_choice_map = {}
-
-        # Oda tipi duzenleme icin secili id
         self.selected_room_type_id = None
-        # Oda durum menusu penceresi
         self.status_popup = None
+        self.guest_form_popup = None
+        self.expenses_popup = None 
 
         # Pencere basligi ve boyutu
         self.title("Boutique Hotel Management")
         self.geometry("1150x700")
         self.minsize(1150, 700)
-
-        # Ana pencere arka plani (mint pastel)
         self.configure(fg_color=self.color_bg)
 
         # ===== UST BAR =====
-        topbar = ctk.CTkFrame(self, fg_color=self.color_sidebar, corner_radius=18)
+        topbar = ctk.CTkFrame(self, fg_color=self.color_sidebar, corner_radius=10) 
         topbar.pack(fill="x", padx=20, pady=(15, 10))
 
         top_left = ctk.CTkFrame(topbar, fg_color="transparent")
         top_left.pack(side="left", padx=12, pady=10)
 
-        # Logo kullanmıyoruz; sadece boşluk bırak
         ctk.CTkLabel(top_left, text="", fg_color="transparent").pack(anchor="w", pady=(4, 4))
 
         top_right = ctk.CTkFrame(topbar, fg_color="transparent")
@@ -89,7 +89,8 @@ class App(ctk.CTk):
             width=240,
             height=34,
             font=self.font_normal,
-            placeholder_text="Ara (misafir, oda, rezervasyon)"
+            placeholder_text="Ara (misafir, oda, rezervasyon)",
+            corner_radius=8 
         )
         self.entry_search.pack(side="left", padx=(0, 10))
 
@@ -98,15 +99,16 @@ class App(ctk.CTk):
             text="Yeni Rezervasyon",
             font=self.font_normal,
             fg_color=self.color_accent,
-            hover_color="#f27a67",
-            text_color="#0b1724",
+            hover_color=NEW_ACCENT_HOVER,
+            text_color=ACCENT_TEXT,
             height=34,
+            corner_radius=8,
             command=self.show_reservations_view
         )
         quick_new_res.pack(side="left")
 
         # ===== ANA FRAME (Sol menu + Sag icerik) =====
-        main_frame = ctk.CTkFrame(self, corner_radius=24, fg_color=self.color_panel)
+        main_frame = ctk.CTkFrame(self, corner_radius=28, fg_color=self.color_panel)
         main_frame.pack(fill="both", expand=True, padx=20, pady=10)
 
         # ----- SOL SIDEBAR -----
@@ -118,6 +120,7 @@ class App(ctk.CTk):
         )
         self.sidebar.pack(side="left", fill="y", padx=(0, 12), pady=12)
 
+        # Logo/Başlık alanı
         logo_label = ctk.CTkLabel(
             self.sidebar,
             text="BS HOTEL\nAdmin Paneli",
@@ -127,7 +130,7 @@ class App(ctk.CTk):
         )
         logo_label.pack(pady=(16, 24))
 
-        # Nav butonları (metin)
+        # Nav butonları
         nav_container = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         nav_container.pack(fill="both", expand=True, pady=10, padx=0)
 
@@ -138,14 +141,16 @@ class App(ctk.CTk):
         self.btn_guests = self._create_nav_button(nav_container, "👥 Misafirler", self.show_guests_view)
         self.btn_reservations = self._create_nav_button(nav_container, "🗓️ Rezervasyonlar", self.show_reservations_view)
 
+        # Exit butonu
         self.btn_logout = ctk.CTkButton(
             self.sidebar,
             text="Exit",
             anchor="w",
-            fg_color="#fcd34d",
-            hover_color="#fbbf24",
-            text_color="#7c2d12",
-            font=self.font_sidebar
+            fg_color=self.color_sidebar_dark,
+            hover_color=self.color_sidebar_dark,
+            text_color="#f8fafc", 
+            font=self.font_sidebar,
+            corner_radius=8
         )
         self.btn_logout.pack(fill="x", padx=18, pady=(20, 15), side="bottom")
 
@@ -158,31 +163,124 @@ class App(ctk.CTk):
         self.content.pack(side="left", fill="both", expand=True, pady=15, padx=(0, 15))
 
         # Ekranlar
-        self.dashboard_frame = self.create_dashboard_frame(self.content)
+        self.dashboard_frame = self.create_dashboard_frame(self.content) 
         self.rooms_frame = self.create_rooms_frame(self.content)
         self.room_types_frame = self.create_room_types_frame(self.content)
         self.guests_frame = self.create_guests_frame(self.content)
         self.reservations_frame = self.create_reservations_frame(self.content)
 
-        # Baslangicta oda ekrani
         self.show_rooms_view()
         self.set_active_nav(self.btn_rooms)
 
     def show_login(self) -> bool:
-        # Login ekranı devre dışı: her zaman izin ver
         return True
 
     # ============================================================
-    # DASHBOARD
+    # ORTAK YARDIMCI / GORUNUM GIZLEME
     # ============================================================
-    def create_dashboard_frame(self, parent):
-        return dashboard_view.create_dashboard_frame(self, parent)
-
-    def refresh_dashboard(self):
-        dashboard_view.refresh_dashboard(self)
+    def hide_all_frames(self):
+        """Tüm içerik çerçevelerini gizler."""
+        if hasattr(self, 'dashboard_frame') and self.dashboard_frame.winfo_exists():
+            self.dashboard_frame.pack_forget()
+        if hasattr(self, 'rooms_frame') and self.rooms_frame.winfo_exists():
+            self.rooms_frame.pack_forget()
+        if hasattr(self, 'room_types_frame') and self.room_types_frame.winfo_exists():
+            self.room_types_frame.pack_forget()
+        if hasattr(self, 'guests_frame') and self.guests_frame.winfo_exists():
+            self.guests_frame.pack_forget()
+        if hasattr(self, 'reservations_frame') and self.reservations_frame.winfo_exists():
+            self.reservations_frame.pack_forget()
 
     # ============================================================
-    # ODA YONETIMI
+    # ORTAK YARDIMCI / HARCAMALAR POP-UP YÖNETİMİ
+    # ============================================================
+    def toggle_expenses_popup(self, reservation_id: int, force_show=False):
+        """Harcamalar pop-up penceresinin açılmasını/kapanmasını yönetir."""
+        if force_show and not self.expenses_popup:
+            try:
+                self.expenses_popup = ctk.CTkToplevel(self)
+                self.expenses_popup.title(f"Rezervasyon Harcamaları (ID: {reservation_id})")
+                self.expenses_popup.geometry("800x600") 
+                self.expenses_popup.transient(self) 
+                self.expenses_popup.configure(fg_color=self.color_panel)
+                
+                # reservations_view.create_expenses_popup_content(self, self.expenses_popup, reservation_id) 
+                
+                self.expenses_popup.protocol("WM_DELETE_WINDOW", self.close_expenses_popup)
+            except Exception as e:
+                mb.showerror("Hata", f"Harcama içeriği yüklenemedi: {e}")
+                self.close_expenses_popup()
+
+        elif not force_show and self.expenses_popup:
+            self.close_expenses_popup()
+
+    def close_expenses_popup(self):
+        """Harcamalar pop-up penceresini kapatır ve referansları sıfırlar."""
+        if self.expenses_popup:
+            self.expenses_popup.destroy()
+            self.expenses_popup = None
+
+    # ============================================================
+    # REZERVASYON İŞLEMLERİ (CHECK-IN / CHECK-OUT)
+    # ============================================================
+    def handleCheckIn(self, reservation_id: int):
+        """Rezervasyonu CHECKED_IN durumuna getirir."""
+        ok = db.update_reservation_status(reservation_id, "CHECKED_IN")
+        if ok:
+            mb.showinfo("Başarılı", f"Rezervasyon #{reservation_id} giriş yaptı (CHECKED_IN).")
+            self.build_reservations_list()
+            self.build_room_cards() 
+            self.refresh_dashboard()
+        else:
+            mb.showerror("Hata", f"Rezervasyon #{reservation_id} giriş yaparken hata oluştu.")
+
+
+    def handleCheckOut(self, reservation_id: int):
+        """Rezervasyonu CHECKED_OUT durumuna getirir."""
+        ok = db.update_reservation_status(reservation_id, "CHECKED_OUT")
+        if ok:
+            mb.showinfo("Başarılı", f"Rezervasyon #{reservation_id} çıkış yaptı (CHECKED_OUT).")
+            self.build_reservations_list()
+            self.build_room_cards() 
+            self.refresh_dashboard()
+        else:
+            mb.showerror("Hata", f"Rezervasyon #{reservation_id} çıkış yaparken hata oluştu.")
+
+
+    # ============================================================
+    # ORTAK YARDIMCI / GORUNUM YONETIMI (Misafir Formu Yönetimi)
+    # ============================================================
+    def toggle_guest_form(self, force_show=False, is_edit=False):
+        """Misafir ekleme formunun pop-up pencerede açılmasını/kapanmasını yönetir."""
+        if force_show and not self.guest_form_popup:
+            self.guest_form_popup = ctk.CTkToplevel(self)
+            self.guest_form_popup.title("Misafir Ekle/Düzenle")
+            self.guest_form_popup.geometry("650x450") 
+            self.guest_form_popup.transient(self)
+            self.guest_form_popup.resizable(False, False)
+            self.guest_form_popup.configure(fg_color=self.color_panel)
+            guests_view.create_guest_form_content(self, self.guest_form_popup)
+            self.guest_form_popup.protocol("WM_DELETE_WINDOW", self.close_guest_form)
+
+            if not is_edit:
+                self.reset_guest_form_fields()
+        
+        elif not force_show and self.guest_form_popup:
+            self.close_guest_form()
+            
+    def close_guest_form(self):
+        if self.guest_form_popup:
+            self.guest_form_popup.destroy()
+            self.guest_form_popup = None
+            self.reset_guest_form_fields()
+
+    def reset_guest_form_fields(self):
+        self.selected_guest_id = None
+        if hasattr(self, 'entry_guest_first_name') and self.entry_guest_first_name.winfo_exists():
+            pass
+            
+    # ============================================================
+    # ODA YONETIMI (GÖRÜNÜM)
     # ============================================================
     def create_rooms_frame(self, parent):
         return rooms_view.create_rooms_frame(self, parent)
@@ -195,6 +293,7 @@ class App(ctk.CTk):
 
     def open_reservation_for_room(self, room_id: int, modal=None):
         rooms_view.open_reservation_for_room(self, room_id, modal)
+
 
     # ============================================================
     # ODA TIPLERI
@@ -218,7 +317,7 @@ class App(ctk.CTk):
         room_types_view.delete_room_type(self)
 
     # ============================================================
-    # MISAFIR YONETIMI
+    # MISAFIRLER
     # ============================================================
     def create_guests_frame(self, parent):
         return guests_view.create_guests_frame(self, parent)
@@ -227,8 +326,10 @@ class App(ctk.CTk):
         guests_view.build_guest_list(self)
 
     def populate_guest_form(self, guest_id):
+        """Misafir Düzenleme formunu açar ve seçili misafirin verileriyle doldurur."""
+        self.toggle_guest_form(force_show=True, is_edit=True) 
         guests_view.populate_guest_form(self, guest_id)
-
+        
     def on_guest_select(self, event):
         guests_view.on_guest_select(self, event)
 
@@ -239,7 +340,7 @@ class App(ctk.CTk):
         guests_view.delete_guest(self, guest_id)
 
     # ============================================================
-    # REZERVASYON YONETIMI
+    # REZERVASYONLAR
     # ============================================================
     def create_reservations_frame(self, parent):
         return reservations_view.create_reservations_frame(self, parent)
@@ -259,8 +360,52 @@ class App(ctk.CTk):
     def cancel_reservation(self, reservation_id: int):
         reservations_view.cancel_reservation(self, reservation_id)
 
+
     # ============================================================
-    # ORTAK YARDIMCI / GORUNUM GECISLERI
+    # DASHBOARD
+    # ============================================================
+    def create_dashboard_frame(self, parent):
+        return dashboard_view.create_dashboard_frame(self, parent)
+
+    def refresh_dashboard(self):
+        dashboard_view.refresh_dashboard(self)
+
+    # ============================================================
+    # GÖRÜNÜM GEÇİŞ METOTLARI
+    # ============================================================
+    def show_dashboard(self):
+        self.hide_all_frames() 
+        self.dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.set_active_nav(self.btn_dashboard)
+        self.refresh_dashboard()
+
+    def show_rooms_view(self):
+        self.hide_all_frames() 
+        self.rooms_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.set_active_nav(self.btn_rooms)
+        self.build_room_cards()
+
+    def show_room_types_view(self):
+        self.hide_all_frames()
+        self.room_types_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.set_active_nav(self.btn_room_types)
+        self.build_room_type_list()
+
+    def show_guests_view(self):
+        self.hide_all_frames()
+        self.guests_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.set_active_nav(self.btn_guests)
+        self.build_guest_list()
+
+    def show_reservations_view(self):
+        self.hide_all_frames()
+        self.reservations_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.set_active_nav(self.btn_reservations)
+        self.build_reservations_list()
+        self.refresh_reservation_choices()
+
+    # ============================================================
+    # ORTAK YARDIMCI / GORUNUM GECISLERI YARDIMCISI
     # ============================================================
     def _create_nav_button(self, parent, label: str, command):
         btn = ctk.CTkButton(
@@ -268,19 +413,19 @@ class App(ctk.CTk):
             text=label,
             width=160,
             height=40,
-            corner_radius=12,
+            corner_radius=8,
             fg_color="transparent",
             hover_color=self.color_sidebar_dark,
             text_color="#e5e7eb",
             font=self.font_sidebar,
             command=command
         )
-        btn.pack(fill="x", padx=16, pady=8)
+        btn.pack(fill="x", padx=16, pady=6)
         if not hasattr(self, "nav_buttons"):
             self.nav_buttons = []
         self.nav_buttons.append({"btn": btn, "label": label})
         return btn
-
+    
     def set_active_nav(self, active_btn):
         self.active_nav_btn = active_btn
         for info in getattr(self, "nav_buttons", []):
@@ -290,14 +435,16 @@ class App(ctk.CTk):
                     text=info["label"],
                     fg_color=self.color_sidebar_light,
                     text_color="#0b1724",
-                    hover_color=self.color_sidebar_light
+                    hover_color=self.color_sidebar_light,
+                    corner_radius=8
                 )
             else:
                 btn.configure(
                     text=info["label"],
                     fg_color="transparent",
                     text_color="#e5e7eb",
-                    hover_color=self.color_sidebar_dark
+                    hover_color=self.color_sidebar_dark,
+                    corner_radius=8
                 )
 
     def get_room_type_color(self, room_type: str) -> str:
@@ -326,52 +473,6 @@ class App(ctk.CTk):
         else:
             return s or "BILINMIYOR"
 
-    def show_dashboard(self):
-        self.rooms_frame.pack_forget()
-        self.room_types_frame.pack_forget()
-        self.guests_frame.pack_forget()
-        self.reservations_frame.pack_forget()
-        self.dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        self.set_active_nav(self.btn_dashboard)
-        self.refresh_dashboard()
-
-    def show_rooms_view(self):
-        self.dashboard_frame.pack_forget()
-        self.room_types_frame.pack_forget()
-        self.guests_frame.pack_forget()
-        self.reservations_frame.pack_forget()
-        self.rooms_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        self.set_active_nav(self.btn_rooms)
-        self.build_room_cards()
-
-    def show_room_types_view(self):
-        self.dashboard_frame.pack_forget()
-        self.rooms_frame.pack_forget()
-        self.guests_frame.pack_forget()
-        self.reservations_frame.pack_forget()
-        self.room_types_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        self.set_active_nav(self.btn_room_types)
-        self.build_room_type_list()
-
-    def show_guests_view(self):
-        self.dashboard_frame.pack_forget()
-        self.rooms_frame.pack_forget()
-        self.room_types_frame.pack_forget()
-        self.reservations_frame.pack_forget()
-        self.guests_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        self.set_active_nav(self.btn_guests)
-        self.build_guest_list()
-
-    def show_reservations_view(self):
-        self.dashboard_frame.pack_forget()
-        self.rooms_frame.pack_forget()
-        self.room_types_frame.pack_forget()
-        self.guests_frame.pack_forget()
-        self.reservations_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        self.set_active_nav(self.btn_reservations)
-        self.build_reservations_list()
-        self.refresh_reservation_choices()
-
 
 if __name__ == "__main__":
     try:
@@ -385,4 +486,3 @@ if __name__ == "__main__":
             mb.showerror("Hata", f"Uygulama kapandı:\n{exc}")
         except Exception:
             pass
-
