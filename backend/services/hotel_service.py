@@ -34,6 +34,8 @@ def get_free_rooms():
 def get_nightly_price_for_room(room_id: int) -> float | None:
     return rooms_repo.get_nightly_price_for_room(room_id)
 
+def get_room_capacity(room_id: int) -> int | None:
+    return rooms_repo.get_room_capacity(room_id)
 
 # ROOM TYPES
 def get_all_room_types():
@@ -78,8 +80,20 @@ def get_all_reservations():
     return reservations_repo.get_all_reservations()
 
 
-def room_has_conflict(room_id: int, check_in: date, check_out: date) -> bool:
-    return reservations_repo.room_has_conflict(room_id, check_in, check_out)
+def room_has_conflict(
+    room_id: int,
+    check_in: date,
+    check_out: date,
+    exclude_reservation_id: int | None = None,
+    requested_guest_count: int = 1,
+) -> bool:
+    return reservations_repo.room_has_conflict(
+        room_id,
+        check_in,
+        check_out,
+        exclude_reservation_id,
+        requested_guest_count,
+    )
 
 
 def insert_reservation(
@@ -88,9 +102,40 @@ def insert_reservation(
     check_in: date,
     check_out: date,
     nightly_amount: float,
+    guest_ids: list[int] | None = None,
     status: str = "CONFIRMED",
 ) -> int | None:
-    return reservations_repo.insert_reservation(guest_id, room_id, check_in, check_out, nightly_amount, status)
+    return reservations_repo.insert_reservation(
+        guest_id,
+        room_id,
+        check_in,
+        check_out,
+        nightly_amount,
+        guest_ids,
+        status,
+    )
+
+
+def update_reservation(
+    reservation_id: int,
+    guest_id: int,
+    room_id: int,
+    check_in: date,
+    check_out: date,
+    nightly_amount: float,
+    guest_ids: list[int] | None = None,
+    status: str = "CONFIRMED",
+) -> bool:
+    return reservations_repo.update_reservation(
+        reservation_id,
+        guest_id,
+        room_id,
+        check_in,
+        check_out,
+        nightly_amount,
+        guest_ids,
+        status,
+    )
 
 
 def update_reservation_status(reservation_id: int, new_status: str) -> bool:

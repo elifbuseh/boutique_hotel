@@ -61,6 +61,8 @@ class App(ctk.CTk):
         self.selected_guest_id = None
         self.guest_choice_map = {}
         self.room_choice_map = {}
+        self.editing_reservation_id = None
+        self.editing_reservation_status = None
         self.selected_room_type_id = None
         self.status_popup = None
         self.guest_form_popup = None
@@ -93,6 +95,8 @@ class App(ctk.CTk):
             corner_radius=8 
         )
         self.entry_search.pack(side="left", padx=(0, 10))
+        self.entry_search.bind("<Return>", lambda event: self.handle_search())
+        self.entry_search.bind("<Escape>", lambda event: self.reset_search_box())
 
         quick_new_res = ctk.CTkButton(
             top_right,
@@ -360,6 +364,23 @@ class App(ctk.CTk):
     def cancel_reservation(self, reservation_id: int):
         reservations_view.cancel_reservation(self, reservation_id)
 
+    def undo_checkout(self, reservation_id: int):
+        """CHECKED_OUT durumunu tekrar CONFIRMED'e çevirir."""
+        ok = db.update_reservation_status(reservation_id, "CONFIRMED")
+        if ok:
+            mb.showinfo("Güncellendi", f"Rezervasyon #{reservation_id} tekrar 'CONFIRMED' durumuna alındı.")
+            self.build_reservations_list()
+            self.build_room_cards()
+            self.refresh_dashboard()
+        else:
+            mb.showerror("Hata", f"Rezervasyon #{reservation_id} durum geri alma işlemi başarısız.")
+
+    def start_edit_reservation(self, res_tuple):
+        reservations_view.start_edit_reservation(self, res_tuple)
+
+    def reactivate_reservation(self, reservation_id: int):
+        reservations_view.reactivate_reservation(self, reservation_id)
+
 
     # ============================================================
     # DASHBOARD
@@ -378,24 +399,28 @@ class App(ctk.CTk):
         self.dashboard_frame.pack(fill="both", expand=True, padx=10, pady=10)
         self.set_active_nav(self.btn_dashboard)
         self.refresh_dashboard()
+        self.reset_search_box()
 
     def show_rooms_view(self):
         self.hide_all_frames() 
         self.rooms_frame.pack(fill="both", expand=True, padx=10, pady=10)
         self.set_active_nav(self.btn_rooms)
         self.build_room_cards()
+        self.reset_search_box()
 
     def show_room_types_view(self):
         self.hide_all_frames()
         self.room_types_frame.pack(fill="both", expand=True, padx=10, pady=10)
         self.set_active_nav(self.btn_room_types)
         self.build_room_type_list()
+        self.reset_search_box()
 
     def show_guests_view(self):
         self.hide_all_frames()
         self.guests_frame.pack(fill="both", expand=True, padx=10, pady=10)
         self.set_active_nav(self.btn_guests)
         self.build_guest_list()
+        self.reset_search_box()
 
     def show_reservations_view(self):
         self.hide_all_frames()
@@ -403,6 +428,7 @@ class App(ctk.CTk):
         self.set_active_nav(self.btn_reservations)
         self.build_reservations_list()
         self.refresh_reservation_choices()
+        self.reset_search_box()
 
     # ============================================================
     # ORTAK YARDIMCI / GORUNUM GECISLERI YARDIMCISI
@@ -472,6 +498,68 @@ class App(ctk.CTk):
             return "BAKIMDA"
         else:
             return s or "BILINMIYOR"
+
+    def handle_search(self):
+        """Basit arama kutusu: misafir, oda ve rezervasyonlarda metin arar."""
+        query = self.entry_search.get().strip().lower() if hasattr(self, "entry_search") else ""
+        if not query:
+            return
+        results = []
+
+        try:
+            guests = db.get_all_guests()
+            guest_hits = []
+            for gid, first, last, email, phone, tc_no in guests:
+                blob = " ".join([str(first or ""), str(last or ""), str(email or ""), str(phone or ""), str(tc_no or "")]).lower()
+                if query in blob:
+                    guest_hits.append(f"Misafir: {first} {last} (ID: {gid})")
+            if guest_hits:
+                results.append("Misafirler:\n" + "\n".join(guest_hits[:5]))
+        except Exception as e:
+            print("Arama (misafir) hatası:", e)
+
+        try:
+            rooms = db.get_all_rooms()
+            room_hits = []
+            for rid, room_number, room_type_name, floor, status in rooms:
+                blob = f"{room_number} {room_type_name or ''} {status or ''}".lower()
+                if query in blob:
+                    room_hits.append(f"Oda #{room_number} ({room_type_name}) ID:{rid}")
+            if room_hits:
+                results.append("Odalar:\n" + "\n".join(room_hits[:5]))
+        except Exception as e:
+            print("Arama (oda) hatası:", e)
+
+        try:
+            reservations = db.get_all_reservations()
+            res_hits = []
+            for r in reservations:
+                res_id = r[0]
+                guest_names = r[3] or ""
+                room_no = r[4]
+                status = r[7] or ""
+                blob = f"{res_id} {guest_names} {room_no} {status}".lower()
+                if query in blob:
+                    res_hits.append(f"Rez #{res_id}: {guest_names} - Oda #{room_no} - {status}")
+            if res_hits:
+                results.append("Rezervasyonlar:\n" + "\n".join(res_hits[:5]))
+        except Exception as e:
+            print("Arama (rezervasyon) hatası:", e)
+
+        if results:
+            mb.showinfo("Arama Sonucu", "\n\n".join(results))
+        else:
+            mb.showinfo("Arama Sonucu", "Eşleşme bulunamadı.")
+        self.reset_search_box()
+
+    def reset_search_box(self):
+        """Arama kutusunu temizler ve odak dışına alır ki placeholder geri gelsin."""
+        try:
+            if hasattr(self, "entry_search"):
+                self.entry_search.delete(0, "end")
+            self.focus_set()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

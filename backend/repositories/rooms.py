@@ -119,3 +119,30 @@ def get_nightly_price_for_room(room_id: int) -> float | None:
     finally:
         if conn:
             conn.close()
+
+
+def get_room_capacity(room_id: int) -> int | None:
+    """
+    Verilen oda için oda tipinin kapasitesini döndürür.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT (rt.capacity_adult + rt.capacity_child) AS capacity
+            FROM rooms r
+            JOIN room_types rt ON r.room_type_id = rt.id
+            WHERE r.id = %s;
+            """,
+            (room_id,),
+        )
+        row = cursor.fetchone()
+        return int(row[0]) if row and row[0] is not None else None
+    except Error as e:
+        _handle_error("⛔ Oda kapasitesi alınırken hata oluştu:", e)
+        return None
+    finally:
+        if conn:
+            conn.close()
